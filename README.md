@@ -12,7 +12,7 @@ There are Red Team and Blue Team in this game:
 Red Team Objectives
 "This framework is an existential threat to sovereign states, financial dynasties, multi-national cartels, and institutional power. If money loses its leverage and compute cannot be bought, our century-old empires collapse. We will delay, stall, degrade, and eradicate this plan."
 
-<blockquote>
+```
                  ┌──────────────────────────────────────────────┐
                  │          RED TEAM ATTACK VECTORS             │
                  └──────────────────────┬───────────────────────┘
@@ -25,7 +25,7 @@ Red Team Objectives
 │    (Trojan Horse│ │   (Weaponized    │  │    Squeeze       │ │    Sabotage      │
 │     Grants)     │ │    Mistrust)     │  │   (Jurisdiction) │ │  (Supply Chain)  │
 └─────────────────┘ └──────────────────┘  └──────────────────┘ └──────────────────┘
-</blockquote>
+```
 
 Attack Vector 1: Institutional Co-optation (The "Trojan Horse" Strategy)
 	Strategy: Instead of opposing the Open Mesh, we flood it with resources. State actors and mega-corporations donate massive compute capacity, raw datasets, and engineering hours to dominate the "Proof-of-Merit" score in the Technical Guild (Pillar 3).
@@ -55,7 +55,7 @@ Attack Vector 4: Physical & Network Sabotage
 The Blue Team (Good Actor Defenses & Contingencies)
 "Human culture shifts across generations, but physical reality and mathematics do not change. We anticipate these attacks and embed defensive mechanics into the core laws and software architecture of the system."
 
-<blockquote>
+```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      BLUE TEAM DEFENSIVE CONTINGENCIES                  │
 └────────────────────────────────────┬────────────────────────────────────┘
@@ -67,7 +67,7 @@ The Blue Team (Good Actor Defenses & Contingencies)
 │ Anti-Capture    │ │ Cultural Bridges │  │ Legal & Grid     │ │ Air-Gapped &     │
 │ Merits & BFT    │ │ & Localized AW   │  │ Decentralization │ │ Mesh Redundancy  │
 └─────────────────┘ └──────────────────┘  └──────────────────┘ └──────────────────┘
-</blockquote>
+```
 
 Remedy 1: Anti-Capture Engineering (Defending against Attack 1)
 	Non-Linear Merit Decay: Proof-of-Merit credentials earned by institutions decay exponentially over time. No entity can "bank" merit to hold permanent power.
