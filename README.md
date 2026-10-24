@@ -8,6 +8,8 @@
 
 The Artificial Wisdom and Open Society 2.0 framework will withstand centuries of human resistance, we must stress-test our system by stepping into the minds of those who hold power in the current world order.
 
+Simply download the <ins>single HTML file</ins> (```tbt-{version}.html```) and open in your local browser to play it.
+
 There are Red Team and Blue Team in this game:<br>
 • &ensp;Red Team represents "Bad Actors," we launch targeted strategies to neutralize the transition;<br>
 • &ensp;Blue Team represents "Good Actors," we build the counter-strategies, contingencies, and structural remedies.
