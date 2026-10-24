@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Big Transition v0.1 - Wargame Simulator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts for retro monospace feel -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=VT323&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            bg: '#0a0e14',
+                            panel: '#111822',
+                            border: '#1e293b',
+                            cyan: '#06b6d4',
+                            green: '#10b981',
+                            red: '#ef4444',
+                            amber: '#f59e0b',
+                            purple: '#8b5cf6',
+                            text: '#e2e8f0',
+                            dim: '#64748b'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['Fira Code', 'Courier New', 'monospace'],
+                        crt: ['VT323', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Retro Terminal Effects */
+        body {
+            background-color: #05080c;
+            color: #06b6d4;
+            font-family: 'Fira Code', monospace;
+            overflow-x: hidden;
+        }
+
+        /* CRT Scanline overlay effect */
+        .scanlines {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.35) 50%
+            ), linear-gradient(
+                90deg,
+                rgba(255, 0, 0, 0.03),
+                rgba(0, 255, 0, 0.01),
+                rgba(0, 0, 255, 0.03)
+            );
+            background-size: 100% 3px, 6px 100%;
+            pointer-events: none;
+        }
+
+        .crt-glow {
+            text-shadow: 0 0 6px rgba(6, 182, 212, 0.6);
+        }
+
+        .crt-glow-red {
+            text-shadow: 0 0 6px rgba(239, 68, 68, 0.7);
+        }
+
+        .crt-glow-green {
+            text-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+        }
+
+        /* Custom scrollbar for log */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0e14;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #06b6d4;
+        }
+
+        .border-glow {
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative select-none">
+    <!-- Optional Overlay Scanlines -->
+    <div id="scanline-overlay" class="scanlines fixed inset-0 z-50 pointer-events-none opacity-80"></div>
+
+    <!-- Header Navigation -->
+    <header class="bg-cyber-panel border-b border-cyber-border px-4 py-3 flex flex-wrap items-center justify-between z-10">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-network-wired text-cyber-cyan text-xl crt-glow"></i>
+            <div>
+                <h1 class="text-lg font-bold tracking-wider text-cyber-cyan crt-glow">THE BIG TRANSITION v0.1</h1>
+                <p class="text-xs text-cyber-dim">AW & Open Society 2.0 Wargame Simulator (2025-2055)</p>
+            </div>
+        </div>
+        
+        <!-- Controls & Utility Buttons -->
+        <div class="flex items-center space-x-2 mt-2 sm:mt-0">
+            <button id="btn-toggle-scanlines" class="text-xs px-2.5 py-1.5 border border-cyber-border rounded bg-cyber-bg text-cyber-dim hover:text-cyber-cyan hover:border-cyber-cyan transition">
+                <i class="fa-solid fa-tv mr-1"></i> CRT Scanlines
+            </button>
+            <button id="btn-reset" class="text-xs px-2.5 py-1.5 border border-cyber-red/50 text-cyber-red bg-cyber-red/10 rounded hover:bg-cyber-red hover:text-white transition">
+                <i class="fa-solid fa-rotate-left mr-1"></i> Reset
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Container -->
+    <main class="flex-1 p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 z-10 max-w-7xl mx-auto w-full">
+
+        <!-- LEFT PANEL: Simulation Status & Controls (4 cols) -->
+        <section class="lg:col-span-4 flex flex-col space-y-4">
+            
+            <!-- Timeline Panel -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-4 border-glow">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs uppercase tracking-widest text-cyber-dim">SIMULATION TIMELINE</span>
+                    <span id="year-display" class="font-crt text-2xl font-bold text-cyber-amber crt-glow">YEAR 00 [2025]</span>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="w-full bg-cyber-bg border border-cyber-border rounded-full h-3 mb-3 overflow-hidden">
+                    <div id="timeline-progress" class="bg-gradient-to-r from-cyber-cyan via-cyber-green to-cyber-amber h-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+
+                <!-- Run Simulation Controls -->
+                <div class="grid grid-cols-2 gap-2 mt-3">
+                    <button id="btn-step-year" class="py-2 px-3 border border-cyber-cyan text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan hover:text-cyber-bg font-bold rounded text-xs transition flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-play"></i>
+                        <span>ADVANCE 1 YEAR</span>
+                    </button>
+                    <button id="btn-auto-run" class="py-2 px-3 border border-cyber-green text-cyber-green bg-cyber-green/10 hover:bg-cyber-green hover:text-cyber-bg font-bold rounded text-xs transition flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-forward-fast"></i>
+                        <span id="auto-run-text">AUTO-RUN 30Y</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Metrics Panel -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-4 flex-1">
+                <h2 class="text-xs font-bold uppercase tracking-widest text-cyber-dim mb-3 flex items-center justify-between">
+                    <span>CORE METRICS DASHBOARD</span>
+                    <i class="fa-solid fa-chart-line text-cyber-cyan"></i>
+                </h2>
+
+                <div class="space-y-3 text-xs">
+                    <!-- Metric 1: Exergy Adoption -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">Global Exergy Adoption ($B)</span>
+                            <span id="val-exergy" class="text-cyber-cyan font-mono font-bold">10%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-exergy" class="bg-cyber-cyan h-full rounded transition-all duration-300" style="width: 10%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 2: Open Compute Mesh -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">Compute Mesh Integrity</span>
+                            <span id="val-mesh" class="text-cyber-green font-mono font-bold">25%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-mesh" class="bg-cyber-green h-full rounded transition-all duration-300" style="width: 25%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 3: Civic Trust -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">Civic Trust & Culture Acceptance</span>
+                            <span id="val-trust" class="text-cyber-cyan font-mono font-bold">20%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-trust" class="bg-cyber-cyan h-full rounded transition-all duration-300" style="width: 20%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 4: Legacy Resistance (Red Metric) -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">Legacy Sovereign/Corp Hostility</span>
+                            <span id="val-resistance" class="text-cyber-red font-mono font-bold">85%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-resistance" class="bg-cyber-red h-full rounded transition-all duration-300" style="width: 85%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Metric 5: Anti-Fragility -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">Systemic Anti-Fragility</span>
+                            <span id="val-antifragility" class="text-cyber-purple font-mono font-bold">15%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-antifragility" class="bg-cyber-purple h-full rounded transition-all duration-300" style="width: 15%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Threat & Defense Status Pills -->
+                <div class="mt-4 pt-3 border-t border-cyber-border grid grid-cols-2 gap-2 text-[11px]">
+                    <div class="bg-cyber-red/10 border border-cyber-red/30 p-2 rounded">
+                        <div class="text-cyber-red font-bold mb-0.5">RED ATTACK VECTOR</div>
+                        <div id="active-red-threat" class="text-cyber-text truncate">Dormant</div>
+                    </div>
+                    <div class="bg-cyber-cyan/10 border border-cyber-cyan/30 p-2 rounded">
+                        <div class="text-cyber-cyan font-bold mb-0.5">BLUE COUNTER-FOCUS</div>
+                        <div id="active-blue-focus" class="text-cyber-text truncate">None Active</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Parameters Setup Box -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-3 text-xs">
+                <div class="font-bold text-cyber-dim mb-2 uppercase">Sandbox Initial Parameters</div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] text-cyber-dim">Red Hostility Rate</label>
+                        <select id="param-hostility" class="w-full bg-cyber-bg border border-cyber-border text-cyber-text p-1 rounded text-xs">
+                            <option value="moderate">Moderate</option>
+                            <option value="aggressive" selected>Aggressive</option>
+                            <option value="extreme">Extreme</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-cyber-dim">Cultural Adoption Speed</label>
+                        <select id="param-culture-speed" class="w-full bg-cyber-bg border border-cyber-border text-cyber-text p-1 rounded text-xs">
+                            <option value="slow" selected>Slow (Historical Lag)</option>
+                            <option value="normal">Normal</option>
+                            <option value="rapid">Rapid</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT PANEL: Decision Matrix & Terminal Output (8 cols) -->
+        <section class="lg:col-span-8 flex flex-col space-y-4">
+
+            <!-- Interactive Blue Team Decision Matrix -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-4">
+                <h2 class="text-xs font-bold uppercase tracking-widest text-cyber-cyan mb-2 flex items-center justify-between">
+                    <span>BLUE TEAM STRATEGIC DECISION MATRIX</span>
+                    <span class="text-[10px] text-cyber-dim">Select Annual Focus</span>
+                </h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <!-- Policy Option 1 -->
+                    <button data-strategy="rd_merit" class="btn-strategy text-left p-2.5 rounded border border-cyber-border bg-cyber-bg hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition text-xs flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-cyber-cyan font-bold mb-1">
+                            <span>1. Exergy R&D & Non-Linear Merit Decay</span>
+                            <i class="fa-solid fa-microchip"></i>
+                        </div>
+                        <p class="text-[11px] text-cyber-dim">Prioritize mathematical proof checks (ZK-ML) and decay rates to stop cartel infiltration.</p>
+                    </button>
+
+                    <!-- Policy Option 2 -->
+                    <button data-strategy="cultural_kernel" class="btn-strategy text-left p-2.5 rounded border border-cyber-border bg-cyber-bg hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition text-xs flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-cyber-cyan font-bold mb-1">
+                            <span>2. Sovereign Cultural Kernels & Academies</span>
+                            <i class="fa-solid fa-graduation-cap"></i>
+                        </div>
+                        <p class="text-[11px] text-cyber-dim">Build localized community trust, combat media panic, and teach civic sortition.</p>
+                    </button>
+
+                    <!-- Policy Option 3 -->
+                    <button data-strategy="stealth_dual_use" class="btn-strategy text-left p-2.5 rounded border border-cyber-border bg-cyber-bg hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition text-xs flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-cyber-cyan font-bold mb-1">
+                            <span>3. Dual-Use Municipal Framing & Stealth</span>
+                            <i class="fa-solid fa-building-columns"></i>
+                        </div>
+                        <p class="text-[11px] text-cyber-dim">Embed compute nodes in university and transit utilities to bypass legislative bans.</p>
+                    </button>
+
+                    <!-- Policy Option 4 -->
+                    <button data-strategy="mesh_hardening" class="btn-strategy text-left p-2.5 rounded border border-cyber-border bg-cyber-bg hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition text-xs flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-cyber-cyan font-bold mb-1">
+                            <span>4. Delay-Tolerant Radio Mesh & Off-Grid Energy</span>
+                            <i class="fa-solid fa-radio"></i>
+                        </div>
+                        <p class="text-[11px] text-cyber-dim">Harden physical infrastructure using off-grid micro-hydro, solar, and packet radio.</p>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Terminal Output Feed -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-4 flex-1 flex flex-col min-h-[300px]">
+                <div class="flex justify-between items-center mb-2 pb-2 border-b border-cyber-border">
+                    <span class="text-xs font-bold uppercase tracking-widest text-cyber-cyan flex items-center">
+                        <i class="fa-solid fa-terminal mr-2"></i> SYSTEM TERMINAL & INCIDENT LOG
+                    </span>
+                    <button id="btn-clear-log" class="text-[10px] text-cyber-dim hover:text-cyber-cyan">Clear Log</button>
+                </div>
+
+                <!-- Log Scroll Container -->
+                <div id="terminal-log" class="flex-1 overflow-y-auto space-y-2 text-xs font-mono pr-2 max-h-[320px]">
+                    <div class="text-cyber-dim">[INIT] Open Society 2.0 Engine initialized...</div>
+                    <div class="text-cyber-dim">[INIT] Ready to simulate 30-year roadmap (2025-2055).</div>
+                    <div class="text-cyber-cyan">[SYS] Select a strategy or click 'ADVANCE 1 YEAR' to begin turn cycle.</div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Milestone Report Modal -->
+    <div id="milestone-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-cyber-panel border border-cyber-cyan rounded-lg p-5 max-w-2xl w-full border-glow text-cyber-text space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-cyber-border pb-3">
+                <h3 id="modal-title" class="text-lg font-bold text-cyber-cyan font-crt crt-glow">MILESTONE REPORT: YEAR 10</h3>
+                <span id="modal-version-badge" class="text-xs px-2 py-1 bg-cyber-purple/20 border border-cyber-purple text-cyber-purple rounded font-mono">GitHub v0.1-alpha</span>
+            </div>
+
+            <div id="modal-body" class="space-y-3 text-xs leading-relaxed font-mono">
+                <!-- Report Contents Inserted via JS -->
+            </div>
+
+            <div class="pt-3 border-t border-cyber-border flex justify-end space-x-2">
+                <button id="btn-close-modal" class="px-4 py-2 border border-cyber-cyan text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan hover:text-cyber-bg font-bold rounded text-xs transition">
+                    CONTINUE SIMULATION
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Engine -->
+    <script>
+        // --- GAME STATE DATA ---
+        const initialState = {
+            year: 0,
+            calendarYear: 2025,
+            exergyAdoption: 10,
+            meshIntegrity: 25,
+            civicTrust: 20,
+            legacyHostility: 85,
+            antiFragility: 15,
+            selectedBlueStrategy: 'rd_merit',
+            activeRedThreat: 'None',
+            autoRun: false,
+            autoRunInterval: null,
+            milestonesTriggered: { 10: false, 20: false, 30: false }
+        };
+
+        let state = JSON.parse(JSON.stringify(initialState));
+
+        // Red Team Attacks Collection
+        const redAttacks = [
+            {
+                id: 'trojan',
+                name: 'Trojan Compute Infiltration',
+                desc: 'Mega-corp consortium donates 10,000 servers to hijack Proof-of-Merit ratings.',
+                impact: { mesh: -8, resistance: +5, antiFragility: +2 }
+            },
+            {
+                id: 'disinfo',
+                name: 'Cultural Disinformation Campaign',
+                desc: 'State media frames Exergy-Standard as a totalizing rationing machine.',
+                impact: { trust: -10, resistance: +6 }
+            },
+            {
+                id: 'regulatory',
+                name: 'Regulatory & Dual-Use Compute Ban',
+                desc: 'National governments pass emergency decree outlawing university ZK-ML training.',
+                impact: { mesh: -6, exergy: -5, resistance: +4 }
+            },
+            {
+                id: 'sabotage',
+                name: 'Physical Subsea & Fiber Sabotage',
+                desc: 'Covert operations sever main regional fiber links to isolate university nodes.',
+                impact: { mesh: -12, antiFragility: +5 }
+            }
+        ];
+
+        // Headlines for logs
+        const newsHeadlines = [
+            "GLOBAL NEWS: Central Banks warn against non-fiat thermodynamic exchange protocols.",
+            "TECH DAILY: Public Universities form decentralized compute alliance using idle supercomputers.",
+            "FINANCIAL TIMES: Logistics firms adopt Exergy units to hedge against volatile hyper-inflation.",
+            "REUTERS: Citizen Assembly sortition selects 500 delegates for global open governance audit.",
+            "WIRED: DiLoCo distributed training bridges 50 university clusters over public internet."
+        ];
+
+        // --- DOM ELEMENTS ---
+        const elYearDisplay = document.getElementById('year-display');
+        const elTimelineProgress = document.getElementById('timeline-progress');
+        const elValExergy = document.getElementById('val-exergy');
+        const elBarExergy = document.getElementById('bar-exergy');
+        const elValMesh = document.getElementById('val-mesh');
+        const elBarMesh = document.getElementById('bar-mesh');
+        const elValTrust = document.getElementById('val-trust');
+        const elBarTrust = document.getElementById('bar-trust');
+        const elValResistance = document.getElementById('val-resistance');
+        const elBarResistance = document.getElementById('bar-resistance');
+        const elValAntifragility = document.getElementById('val-antifragility');
+        const elBarAntifragility = document.getElementById('bar-antifragility');
+        const elActiveRedThreat = document.getElementById('active-red-threat');
+        const elActiveBlueFocus = document.getElementById('active-blue-focus');
+        const elTerminalLog = document.getElementById('terminal-log');
+        const elModal = document.getElementById('milestone-modal');
+        const elModalTitle = document.getElementById('modal-title');
+        const elModalBody = document.getElementById('modal-body');
+        const elModalBadge = document.getElementById('modal-version-badge');
+
+        // Buttons
+        const btnStepYear = document.getElementById('btn-step-year');
+        const btnAutoRun = document.getElementById('btn-auto-run');
+        const btnReset = document.getElementById('btn-reset');
+        const btnClearLog = document.getElementById('btn-clear-log');
+        const btnToggleScanlines = document.getElementById('btn-toggle-scanlines');
+        const btnCloseModal = document.getElementById('btn-close-modal');
+        const strategyButtons = document.querySelectorAll('.btn-strategy');
+
+        // --- CORE FUNCTIONS ---
+
+        function updateUI() {
+            // Update Timeline
+            elYearDisplay.innerText = `YEAR ${state.year.toString().padStart(2, '0')} [${state.calendarYear}]`;
+            const progressPercent = (state.year / 30) * 100;
+            elTimelineProgress.style.width = `${progressPercent}%`;
+
+            // Clamp Values 0 to 100
+            state.exergyAdoption = Math.min(100, Math.max(0, state.exergyAdoption));
+            state.meshIntegrity = Math.min(100, Math.max(0, state.meshIntegrity));
+            state.civicTrust = Math.min(100, Math.max(0, state.civicTrust));
+            state.legacyHostility = Math.min(100, Math.max(0, state.legacyHostility));
+            state.antiFragility = Math.min(100, Math.max(0, state.antiFragility));
+
+            // Update Metrics Bars & Percentages
+            elValExergy.innerText = `${Math.round(state.exergyAdoption)}%`;
+            elBarExergy.style.width = `${state.exergyAdoption}%`;
+
+            elValMesh.innerText = `${Math.round(state.meshIntegrity)}%`;
+            elBarMesh.style.width = `${state.meshIntegrity}%`;
+
+            elValTrust.innerText = `${Math.round(state.civicTrust)}%`;
+            elBarTrust.style.width = `${state.civicTrust}%`;
+
+            elValResistance.innerText = `${Math.round(state.legacyHostility)}%`;
+            elBarResistance.style.width = `${state.legacyHostility}%`;
+
+            elValAntifragility.innerText = `${Math.round(state.antiFragility)}%`;
+            elBarAntifragility.style.width = `${state.antiFragility}%`;
+
+            // Threat / Focus Displays
+            elActiveRedThreat.innerText = state.activeRedThreat;
+            
+            const strategyNames = {
+                'rd_merit': '1. R&D & Merit Decay',
+                'cultural_kernel': '2. Cultural Kernels',
+                'stealth_dual_use': '3. Dual-Use Stealth',
+                'mesh_hardening': '4. Radio & Off-Grid Mesh'
+            };
+            elActiveBlueFocus.innerText = strategyNames[state.selectedBlueStrategy] || 'None';
+
+            // Active button highlight
+            strategyButtons.forEach(btn => {
+                if (btn.dataset.strategy === state.selectedBlueStrategy) {
+                    btn.classList.add('border-cyber-cyan', 'bg-cyber-cyan/15');
+                    btn.classList.remove('border-cyber-border', 'bg-cyber-bg');
+                } else {
+                    btn.classList.remove('border-cyber-cyan', 'bg-cyber-cyan/15');
+                    btn.classList.add('border-cyber-border', 'bg-cyber-bg');
+                }
+            });
+        }
+
+        function appendLog(text, type = 'sys') {
+            const entry = document.createElement('div');
+            const timeStamp = `[Y${state.year.toString().padStart(2, '0')}]`;
+            
+            if (type === 'red') {
+                entry.className = 'text-cyber-red font-semibold';
+                entry.innerText = `${timeStamp} [RED ATTACK] ${text}`;
+            } else if (type === 'blue') {
+                entry.className = 'text-cyber-cyan font-semibold';
+                entry.innerText = `${timeStamp} [BLUE DEFENSE] ${text}`;
+            } else if (type === 'headline') {
+                entry.className = 'text-cyber-amber italic';
+                entry.innerText = `${timeStamp} [MEDIA] ${text}`;
+            } else {
+                entry.className = 'text-cyber-dim';
+                entry.innerText = `${timeStamp} ${text}`;
+            }
+
+            elTerminalLog.appendChild(entry);
+            elTerminalLog.scrollTop = elTerminalLog.scrollHeight;
+        }
+
+        // --- SIMULATION STEP ENGINE ---
+        function advanceYear() {
+            if (state.year >= 30) {
+                stopAutoRun();
+                appendLog("Simulation complete. 30-year roadmap finished.", "sys");
+                return;
+            }
+
+            state.year += 1;
+            state.calendarYear += 1;
+
+            // 1. Red Team Action Selection
+            const randomAttack = redAttacks[Math.floor(Math.random() * redAttacks.length)];
+            state.activeRedThreat = randomAttack.name;
+            appendLog(`${randomAttack.name}: ${randomAttack.desc}`, 'red');
+
+            // Apply Attack Damage
+            if (randomAttack.impact.mesh) state.meshIntegrity += randomAttack.impact.mesh;
+            if (randomAttack.impact.trust) state.civicTrust += randomAttack.impact.trust;
+            if (randomAttack.impact.exergy) state.exergyAdoption += randomAttack.impact.exergy;
+            if (randomAttack.impact.resistance) state.legacyHostility += randomAttack.impact.resistance;
+            if (randomAttack.impact.antiFragility) state.antiFragility += randomAttack.impact.antiFragility;
+
+            // 2. Blue Team Countermeasure Execution
+            let blueLogMsg = "";
+            switch (state.selectedBlueStrategy) {
+                case 'rd_merit':
+                    state.meshIntegrity += 7;
+                    state.antiFragility += 4;
+                    state.legacyHostility -= 3;
+                    blueLogMsg = "Enforced ZK-ML zero-knowledge proof validation and non-linear merit decay. Infiltration mitigated.";
+                    break;
+                case 'cultural_kernel':
+                    state.civicTrust += 8;
+                    state.exergyAdoption += 4;
+                    state.legacyHostility -= 2;
+                    blueLogMsg = "Deployed Sovereign Cultural Kernels & Civic Academies. Grassroots trust strengthened.";
+                    break;
+                case 'stealth_dual_use':
+                    state.meshIntegrity += 5;
+                    state.exergyAdoption += 6;
+                    state.legacyHostility -= 5;
+                    blueLogMsg = "Embedded mesh software in municipal cloud & transit utility systems. Bypassed legal blocks.";
+                    break;
+                case 'mesh_hardening':
+                    state.antiFragility += 8;
+                    state.meshIntegrity += 6;
+                    state.civicTrust += 2;
+                    blueLogMsg = "Activated delay-tolerant radio packet mesh and off-grid solar/hydro nodes. Physical resilience increased.";
+                    break;
+            }
+            appendLog(blueLogMsg, 'blue');
+
+            // 3. Autonomous Natural Dynamic Mechanics (Thermodynamics & Convergence)
+            // Systemic Anti-Fragility accelerates adaptation
+            const resilienceBonus = (state.antiFragility / 100) * 2;
+            state.exergyAdoption += 1.5 + resilienceBonus;
+            state.civicTrust += 1.0;
+
+            // As Exergy Adoption grows, Legacy Hostility naturally decreases (Inversion Tipping Point)
+            if (state.exergyAdoption > 40) {
+                state.legacyHostility -= 2.5;
+            }
+
+            // Headline Log
+            const randomHeadline = newsHeadlines[Math.floor(Math.random() * newsHeadlines.length)];
+            appendLog(randomHeadline, 'headline');
+
+            updateUI();
+
+            // Check Milestones at 10, 20, 30
+            if (state.year === 10 && !state.milestonesTriggered[10]) {
+                triggerMilestoneModal(10);
+            } else if (state.year === 20 && !state.milestonesTriggered[20]) {
+                triggerMilestoneModal(20);
+            } else if (state.year === 30 && !state.milestonesTriggered[30]) {
+                triggerMilestoneModal(30);
+            }
+        }
+
+        // --- MILESTONE REPORT GENERATOR ---
+        function triggerMilestoneModal(year) {
+            state.milestonesTriggered[year] = true;
+            if (state.autoRun) stopAutoRun();
+
+            let title = "";
+            let badge = "";
+            let content = "";
+
+            if (year === 10) {
+                title = "YEAR 10 MILESTONE: THE CO-EXISTENCE SANDBOX";
+                badge = "GitHub Release v0.1 Ready";
+                content = `
+                    <p><strong class="text-cyber-cyan">Phase Summary:</strong> Open Society 2.0 has survived its first decade of legacy pushback. Public universities now run DiLoCo federated training across 120 global nodes.</p>
+                    <div class="bg-cyber-bg p-3 border border-cyber-border rounded space-y-1 my-2">
+                        <div>- Exergy Adoption: <span class="text-cyber-cyan">${Math.round(state.exergyAdoption)}%</span></div>
+                        <div>- Compute Mesh Integrity: <span class="text-cyber-green">${Math.round(state.meshIntegrity)}%</span></div>
+                        <div>- Legacy Hostility: <span class="text-cyber-red">${Math.round(state.legacyHostility)}%</span></div>
+                    </div>
+                    <p><strong class="text-cyber-amber">GitHub Open-Source Readiness:</strong> System status is stable enough for GitHub repository publication (v0.1). Developer community onboarding initiated for Linux & open-source contributors.</p>
+                `;
+            } else if (year === 20) {
+                title = "YEAR 20 MILESTONE: THE ECONOMIC INVERSION";
+                badge = "GitHub Release v0.3 (Linux Core)";
+                content = `
+                    <p><strong class="text-cyber-cyan">Phase Summary:</strong> The tipping point has begun. Facing fiat volatility and resource stress, major municipalities and corporations run transport logistics directly on Exergy State-Channels.</p>
+                    <div class="bg-cyber-bg p-3 border border-cyber-border rounded space-y-1 my-2">
+                        <div>- Exergy Adoption: <span class="text-cyber-cyan">${Math.round(state.exergyAdoption)}%</span></div>
+                        <div>- Systemic Anti-Fragility: <span class="text-cyber-purple">${Math.round(state.antiFragility)}%</span></div>
+                        <div>- Legacy Hostility: <span class="text-cyber-red">${Math.round(state.legacyHostility)}%</span></div>
+                    </div>
+                    <p><strong class="text-cyber-green">Linux Playbook Alignment:</strong> Legacy power structures no longer attempt to eradicate the mesh. Like corporate adoption of Linux kernels, they embrace the mesh to cut operational costs.</p>
+                `;
+            } else if (year === 30) {
+                title = "YEAR 30 MILESTONE: THERMODYNAMIC EQUILIBRIUM";
+                badge = "GitHub v0.5 Stable Milestone";
+                content = `
+                    <p><strong class="text-cyber-green">30-YEAR ROADMAP COMPLETED:</strong> The transition has reached a steady, self-reinforcing equilibrium without military conflict or economic collapse.</p>
+                    <div class="bg-cyber-bg p-3 border border-cyber-border rounded space-y-1 my-2">
+                        <div>- Final Exergy Adoption: <span class="text-cyber-cyan">${Math.round(state.exergyAdoption)}%</span></div>
+                        <div>- Final Civic Trust: <span class="text-cyber-cyan">${Math.round(state.civicTrust)}%</span></div>
+                        <div>- Final Legacy Hostility: <span class="text-cyber-green">${Math.round(state.legacyHostility)}%</span> (Dissolved into civic admin)</div>
+                    </div>
+                    <p><strong class="text-cyber-cyan">Open Society 2.0 Established:</strong> Compute is now governed as a civic utility, zero-sum exergy logistics handle physical provisioning, and the Global Citizen Assembly holds permanent governance over AW systems.</p>
+                `;
+            }
+
+            elModalTitle.innerText = title;
+            elModalBadge.innerText = badge;
+            elModalBody.innerHTML = content;
+            elModal.classList.remove('hidden');
+        }
+
+        // --- AUTO RUN CONTROLLER ---
+        function toggleAutoRun() {
+            if (state.autoRun) {
+                stopAutoRun();
+            } else {
+                state.autoRun = true;
+                btnAutoRun.classList.remove('border-cyber-green', 'text-cyber-green', 'bg-cyber-green/10');
+                btnAutoRun.classList.add('border-cyber-amber', 'text-cyber-amber', 'bg-cyber-amber/20');
+                document.getElementById('auto-run-text').innerText = "PAUSE SIM";
+
+                state.autoRunInterval = setInterval(() => {
+                    if (state.year >= 30) {
+                        stopAutoRun();
+                    } else {
+                        advanceYear();
+                    }
+                }, 800);
+            }
+        }
+
+        function stopAutoRun() {
+            state.autoRun = false;
+            if (state.autoRunInterval) clearInterval(state.autoRunInterval);
+            btnAutoRun.classList.add('border-cyber-green', 'text-cyber-green', 'bg-cyber-green/10');
+            btnAutoRun.classList.remove('border-cyber-amber', 'text-cyber-amber', 'bg-cyber-amber/20');
+            document.getElementById('auto-run-text').innerText = "AUTO-RUN 30Y";
+        }
+
+        // --- RESET ENGINE ---
+        function resetSimulation() {
+            stopAutoRun();
+            state = JSON.parse(JSON.stringify(initialState));
+            elTerminalLog.innerHTML = `
+                <div class="text-cyber-dim">[INIT] Open Society 2.0 Engine reset to Year 0.</div>
+                <div class="text-cyber-cyan">[SYS] Parameters re-initialized. Ready for strategy execution.</div>
+            `;
+            elModal.classList.add('hidden');
+            updateUI();
+        }
+
+        // --- EVENT LISTENERS ---
+        btnStepYear.addEventListener('click', () => {
+            if (state.year < 30) advanceYear();
+        });
+
+        btnAutoRun.addEventListener('click', toggleAutoRun);
+        btnReset.addEventListener('click', resetSimulation);
+        btnClearLog.addEventListener('click', () => { elTerminalLog.innerHTML = ''; });
+
+        btnToggleScanlines.addEventListener('click', () => {
+            const overlay = document.getElementById('scanline-overlay');
+            overlay.classList.toggle('hidden');
+        });
+
+        btnCloseModal.addEventListener('click', () => {
+            elModal.classList.add('hidden');
+        });
+
+        strategyButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.selectedBlueStrategy = btn.dataset.strategy;
+                updateUI();
+            });
+        });
+
+        // Initialize UI
+        updateUI();
+    </script>
+</body>
+</html>
