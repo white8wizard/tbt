@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>大轉型 The Big Transition v0.1 - 兵棋推演模擬器</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&family=Noto+Sans+TC:wght@400;500;700;900&family=VT323&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            bg: '#0a0e14',
+                            panel: '#111822',
+                            border: '#1e293b',
+                            cyan: '#06b6d4',
+                            green: '#10b981',
+                            red: '#ef4444',
+                            amber: '#f59e0b',
+                            purple: '#8b5cf6',
+                            text: '#e2e8f0',
+                            dim: '#64748b'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['Fira Code', 'Noto Sans TC', 'monospace'],
+                        crt: ['VT323', 'Noto Sans TC', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #05080c;
+            color: #06b6d4;
+            font-family: 'Fira Code', 'Noto Sans TC', monospace;
+            overflow-x: hidden;
+        }
+
+        /* CRT 掃描線光影特效 */
+        .scanlines {
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.35) 50%
+            ), linear-gradient(
+                90deg,
+                rgba(255, 0, 0, 0.03),
+                rgba(0, 255, 0, 0.01),
+                rgba(0, 0, 255, 0.03)
+            );
+            background-size: 100% 3px, 6px 100%;
+            pointer-events: none;
+        }
+
+        .crt-glow {
+            text-shadow: 0 0 6px rgba(6, 182, 212, 0.6);
+        }
+
+        .crt-glow-red {
+            text-shadow: 0 0 6px rgba(239, 68, 68, 0.7);
+        }
+
+        .crt-glow-green {
+            text-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+        }
+
+        /* 自訂滾動條 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0a0e14;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #06b6d4;
+        }
+
+        .border-glow {
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.15);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col relative select-none">
+    <!-- CRT 掃描線圖層 -->
+    <div id="scanline-overlay" class="scanlines fixed inset-0 z-50 pointer-events-none opacity-80"></div>
+
+    <!-- 頂部導航列 -->
+    <header class="bg-cyber-panel border-b border-cyber-border px-4 py-3 flex flex-wrap items-center justify-between z-10">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-network-wired text-cyber-cyan text-xl crt-glow"></i>
+            <div>
+                <h1 class="text-lg font-bold tracking-wider text-cyber-cyan crt-glow">大轉型 THE BIG TRANSITION v0.1</h1>
+                <p class="text-xs text-cyber-dim">AW 與開放社會 2.0 兵棋推演模擬器 (2025-2055)</p>
+            </div>
+        </div>
+        
+        <!-- 工具與控制按鈕 -->
+        <div class="flex items-center space-x-2 mt-2 sm:mt-0">
+            <button id="btn-toggle-scanlines" class="text-xs px-2.5 py-1.5 border border-cyber-border rounded bg-cyber-bg text-cyber-dim hover:text-cyber-cyan hover:border-cyber-cyan transition">
+                <i class="fa-solid fa-tv mr-1"></i> CRT 掃描線
+            </button>
+            <button id="btn-reset" class="text-xs px-2.5 py-1.5 border border-cyber-red/50 text-cyber-red bg-cyber-red/10 rounded hover:bg-cyber-red hover:text-white transition">
+                <i class="fa-solid fa-rotate-left mr-1"></i> 重置模擬
+            </button>
+        </div>
+    </header>
+
+    <!-- 主模擬面板區塊 -->
+    <main class="flex-1 p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 z-10 max-w-7xl mx-auto w-full">
+
+        <!-- 左側面板：模擬狀態與核心數據 (4 欄) -->
+        <section class="lg:col-span-4 flex flex-col space-y-4">
+            
+            <!-- 時間軸儀表板 -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-4 border-glow">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs uppercase tracking-widest text-cyber-dim">模擬時間軸</span>
+                    <span id="year-display" class="font-crt text-2xl font-bold text-cyber-amber crt-glow">第 00 年 [2025]</span>
+                </div>
+                
+                <!-- 進度條 -->
+                <div class="w-full bg-cyber-bg border border-cyber-border rounded-full h-3 mb-3 overflow-hidden">
+                    <div id="timeline-progress" class="bg-gradient-to-r from-cyber-cyan via-cyber-green to-cyber-amber h-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+
+                <!-- 推進控制按鈕 -->
+                <div class="grid grid-cols-2 gap-2 mt-3">
+                    <button id="btn-step-year" class="py-2 px-3 border border-cyber-cyan text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan hover:text-cyber-bg font-bold rounded text-xs transition flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-play"></i>
+                        <span>推進 1 年</span>
+                    </button>
+                    <button id="btn-auto-run" class="py-2 px-3 border border-cyber-green text-cyber-green bg-cyber-green/10 hover:bg-cyber-green hover:text-cyber-bg font-bold rounded text-xs transition flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-forward-fast"></i>
+                        <span id="auto-run-text">自動推演 30年</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 核心指標儀表板 -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-4 flex-1">
+                <h2 class="text-xs font-bold uppercase tracking-widest text-cyber-dim mb-3 flex items-center justify-between">
+                    <span>核心模擬指標</span>
+                    <i class="fa-solid fa-chart-line text-cyber-cyan"></i>
+                </h2>
+
+                <div class="space-y-3 text-xs">
+                    <!-- 指標 1: 可用能採納率 -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">可用能採納率 (Exergy Adoption)</span>
+                            <span id="val-exergy" class="text-cyber-cyan font-mono font-bold">10%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-exergy" class="bg-cyber-cyan h-full rounded transition-all duration-300" style="width: 10%"></div>
+                        </div>
+                    </div>
+
+                    <!-- 指標 2: 開源算力網完整性 -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">開源算力網完整性 (Compute Mesh)</span>
+                            <span id="val-mesh" class="text-cyber-green font-mono font-bold">25%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-mesh" class="bg-cyber-green h-full rounded transition-all duration-300" style="width: 25%"></div>
+                        </div>
+                    </div>
+
+                    <!-- 指標 3: 公民信任度 -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">公民信任度與文化接受度 (Civic Trust)</span>
+                            <span id="val-trust" class="text-cyber-cyan font-mono font-bold">20%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-trust" class="bg-cyber-cyan h-full rounded transition-all duration-300" style="width: 20%"></div>
+                        </div>
+                    </div>
+
+                    <!-- 指標 4: 舊體系敵意度 (紅隊指標) -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">舊體系敵意與壟斷阻力 (Legacy Hostility)</span>
+                            <span id="val-resistance" class="text-cyber-red font-mono font-bold">85%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-resistance" class="bg-cyber-red h-full rounded transition-all duration-300" style="width: 85%"></div>
+                        </div>
+                    </div>
+
+                    <!-- 指標 5: 系統反脆性 -->
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-cyber-text">系統反脆性 (System Anti-Fragility)</span>
+                            <span id="val-antifragility" class="text-cyber-purple font-mono font-bold">15%</span>
+                        </div>
+                        <div class="w-full bg-cyber-bg border border-cyber-border rounded h-2">
+                            <div id="bar-antifragility" class="bg-cyber-purple h-full rounded transition-all duration-300" style="width: 15%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 威脅與防禦狀態顯示 -->
+                <div class="mt-4 pt-3 border-t border-cyber-border grid grid-cols-2 gap-2 text-[11px]">
+                    <div class="bg-cyber-red/10 border border-cyber-red/30 p-2 rounded">
+                        <div class="text-cyber-red font-bold mb-0.5">紅隊攻擊向量</div>
+                        <div id="active-red-threat" class="text-cyber-text truncate">待命中 (Dormant)</div>
+                    </div>
+                    <div class="bg-cyber-cyan/10 border border-cyber-cyan/30 p-2 rounded">
+                        <div class="text-cyber-cyan font-bold mb-0.5">藍隊對抗焦點</div>
+                        <div id="active-blue-focus" class="text-cyber-text truncate">尚未選定</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 沙盒初始參數 -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-3 text-xs">
+                <div class="font-bold text-cyber-dim mb-2 uppercase">沙盒初始環境參數</div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] text-cyber-dim">舊體系敵意強度</label>
+                        <select id="param-hostility" class="w-full bg-cyber-bg border border-cyber-border text-cyber-text p-1 rounded text-xs">
+                            <option value="moderate">溫和 (Moderate)</option>
+                            <option value="aggressive" selected>激進 (Aggressive)</option>
+                            <option value="extreme">極端封鎖 (Extreme)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-cyber-dim">文化採納擴散速度</label>
+                        <select id="param-culture-speed" class="w-full bg-cyber-bg border border-cyber-border text-cyber-text p-1 rounded text-xs">
+                            <option value="slow" selected>漸進滯後 (Slow)</option>
+                            <option value="normal">標準速度 (Normal)</option>
+                            <option value="rapid">快速突破 (Rapid)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 右側面板：藍隊決策矩陣與即時日誌 (8 欄) -->
+        <section class="lg:col-span-8 flex flex-col space-y-4">
+
+            <!-- 藍隊年度決策矩陣 -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-4">
+                <h2 class="text-xs font-bold uppercase tracking-widest text-cyber-cyan mb-2 flex items-center justify-between">
+                    <span>藍隊戰略決策矩陣 (BLUE TEAM STRATEGY)</span>
+                    <span class="text-[10px] text-cyber-dim">請選擇年度重點策略</span>
+                </h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <!-- 策略 1 -->
+                    <button data-strategy="rd_merit" class="btn-strategy text-left p-2.5 rounded border border-cyber-border bg-cyber-bg hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition text-xs flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-cyber-cyan font-bold mb-1">
+                            <span>1. 功績衰減與零知識驗證 (ZK-ML)</span>
+                            <i class="fa-solid fa-microchip"></i>
+                        </div>
+                        <p class="text-[11px] text-cyber-dim">強化非線性功績衰減（Merit Decay）與密碼學驗證，防止壟斷資本掠奪算力權重。</p>
+                    </button>
+
+                    <!-- 策略 2 -->
+                    <button data-strategy="cultural_kernel" class="btn-strategy text-left p-2.5 rounded border border-cyber-border bg-cyber-bg hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition text-xs flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-cyber-cyan font-bold mb-1">
+                            <span>2. 主權文化核心與公民學院</span>
+                            <i class="fa-solid fa-graduation-cap"></i>
+                        </div>
+                        <p class="text-[11px] text-cyber-dim">建立在地社群信任，反擊媒體認知作戰，推廣抽籤制（Sortition）公民治理。</p>
+                    </button>
+
+                    <!-- 策略 3 -->
+                    <button data-strategy="stealth_dual_use" class="btn-strategy text-left p-2.5 rounded border border-cyber-border bg-cyber-bg hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition text-xs flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-cyber-cyan font-bold mb-1">
+                            <span>3. 雙重用途隱蔽部署 (Dual-Use Stealth)</span>
+                            <i class="fa-solid fa-building-columns"></i>
+                        </div>
+                        <p class="text-[11px] text-cyber-dim">將算力節點嵌入大學與市政公共基礎設施，繞過立法機關的禁令封鎖。</p>
+                    </button>
+
+                    <!-- 策略 4 -->
+                    <button data-strategy="mesh_hardening" class="btn-strategy text-left p-2.5 rounded border border-cyber-border bg-cyber-bg hover:border-cyber-cyan hover:bg-cyber-cyan/5 transition text-xs flex flex-col justify-between">
+                        <div class="flex justify-between items-center text-cyber-cyan font-bold mb-1">
+                            <span>4. 延遲容忍無線網與離網能源</span>
+                            <i class="fa-solid fa-radio"></i>
+                        </div>
+                        <p class="text-[11px] text-cyber-dim">部署離網微型水力/太陽能與封包無線電（Delay-Tolerant Mesh），實現硬體級抗脆性。</p>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 終端機即時事件日誌 -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-lg p-4 flex-1 flex flex-col min-h-[300px]">
+                <div class="flex justify-between items-center mb-2 pb-2 border-b border-cyber-border">
+                    <span class="text-xs font-bold uppercase tracking-widest text-cyber-cyan flex items-center">
+                        <i class="fa-solid fa-terminal mr-2"></i> 實時終端日誌與事件追蹤 (TERMINAL LOG)
+                    </span>
+                    <button id="btn-clear-log" class="text-[10px] text-cyber-dim hover:text-cyber-cyan">清空日誌</button>
+                </div>
+
+                <!-- 日誌內容區塊 -->
+                <div id="terminal-log" class="flex-1 overflow-y-auto space-y-2 text-xs font-mono pr-2 max-h-[320px]">
+                    <div class="text-cyber-dim">[系統初始化] 開放社會 2.0 (Open Society 2.0) 兵棋推演引擎載入完畢...</div>
+                    <div class="text-cyber-dim">[系統初始化] 30 年轉型路線圖 (2025-2055) 準備就緒。</div>
+                    <div class="text-cyber-cyan">[指示] 請選擇藍隊對抗策略，並點擊「推進 1 年」開始演練。</div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 里程碑階段報告 Modal 視窗 -->
+    <div id="milestone-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-cyber-panel border border-cyber-cyan rounded-lg p-5 max-w-2xl w-full border-glow text-cyber-text space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-cyber-border pb-3">
+                <h3 id="modal-title" class="text-lg font-bold text-cyber-cyan font-crt crt-glow">里程碑報告：第 10 年</h3>
+                <span id="modal-version-badge" class="text-xs px-2 py-1 bg-cyber-purple/20 border border-cyber-purple text-cyber-purple rounded font-mono">GitHub v0.1-alpha</span>
+            </div>
+
+            <div id="modal-body" class="space-y-3 text-xs leading-relaxed font-mono">
+                <!-- 報告內容由 JavaScript 動態生成 -->
+            </div>
+
+            <div class="pt-3 border-t border-cyber-border flex justify-end space-x-2">
+                <button id="btn-close-modal" class="px-4 py-2 border border-cyber-cyan text-cyber-cyan bg-cyber-cyan/10 hover:bg-cyber-cyan hover:text-cyber-bg font-bold rounded text-xs transition">
+                    繼續演練 (CONTINUE)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲邏輯腳本 -->
+    <script>
+        // --- 遊戲初始狀態 ---
+        const initialState = {
+            year: 0,
+            calendarYear: 2025,
+            exergyAdoption: 10,
+            meshIntegrity: 25,
+            civicTrust: 20,
+            legacyHostility: 85,
+            antiFragility: 15,
+            selectedBlueStrategy: 'rd_merit',
+            activeRedThreat: '待命中',
+            autoRun: false,
+            autoRunInterval: null,
+            milestonesTriggered: { 10: false, 20: false, 30: false }
+        };
+
+        let state = JSON.parse(JSON.stringify(initialState));
+
+        // 紅隊攻擊向量事件庫
+        const redAttacks = [
+            {
+                id: 'trojan',
+                name: '特洛伊算力滲透 (Trojan Compute Injection)',
+                desc: '壟斷企業聯盟捐贈 10,000 台伺服器，企圖透過算力優勢劫持 Proof-of-Merit 權重。',
+                impact: { mesh: -8, resistance: +5, antiFragility: +2 }
+            },
+            {
+                id: 'disinfo',
+                name: '文化與認知作戰 (Narrative Disinformation)',
+                desc: '主流媒體抹黑可用能標準（EXS）為極權配給機器，引發大眾恐慌。',
+                impact: { trust: -10, resistance: +6 }
+            },
+            {
+                id: 'regulatory',
+                name: '法規與金融封鎖 (Regulatory Squeeze)',
+                desc: '多國政府頒布緊急法案，將大學與研究機構的分布式 ZK-ML 模型訓練定為非法。',
+                impact: { mesh: -6, exergy: -5, resistance: +4 }
+            },
+            {
+                id: 'sabotage',
+                name: '網路與實體破壞 (Infrastructure Sabotage)',
+                desc: '特務機構祕密切斷海底光纖與區域網段，試圖孤立各區域的大學計算節點。',
+                impact: { mesh: -12, antiFragility: +5 }
+            }
+        ];
+
+        // 國際新聞動態與時事 log
+        const newsHeadlines = [
+            "全球新聞：央行警告非法定熱力學交換協議（Exergy Standard）可能引發金融不穩定。",
+            "科技日報：全球 50 所公立大學組成去中心化算力聯盟，利用閒置超級電腦運算。",
+            "金融時報：跨國物流企業開始採用 Exergy 單位作為對抗法幣通膨的對沖工具。",
+            "路透社：公民大會（Sortition）隨機抽籤選出 500 名代表，開展全球開放治理審計。",
+            "WIRED 雜誌：DiLoCo 分布式訓練技術成功克服公網延遲，連接全球上萬節點。"
+        ];
+
+        // --- DOM 元素引用 ---
+        const elYearDisplay = document.getElementById('year-display');
+        const elTimelineProgress = document.getElementById('timeline-progress');
+        const elValExergy = document.getElementById('val-exergy');
+        const elBarExergy = document.getElementById('bar-exergy');
+        const elValMesh = document.getElementById('val-mesh');
+        const elBarMesh = document.getElementById('bar-mesh');
+        const elValTrust = document.getElementById('val-trust');
+        const elBarTrust = document.getElementById('bar-trust');
+        const elValResistance = document.getElementById('val-resistance');
+        const elBarResistance = document.getElementById('bar-resistance');
+        const elValAntifragility = document.getElementById('val-antifragility');
+        const elBarAntifragility = document.getElementById('bar-antifragility');
+        const elActiveRedThreat = document.getElementById('active-red-threat');
+        const elActiveBlueFocus = document.getElementById('active-blue-focus');
+        const elTerminalLog = document.getElementById('terminal-log');
+        const elModal = document.getElementById('milestone-modal');
+        const elModalTitle = document.getElementById('modal-title');
+        const elModalBody = document.getElementById('modal-body');
+        const elModalBadge = document.getElementById('modal-version-badge');
+
+        // 按鈕控制
+        const btnStepYear = document.getElementById('btn-step-year');
+        const btnAutoRun = document.getElementById('btn-auto-run');
+        const btnReset = document.getElementById('btn-reset');
+        const btnClearLog = document.getElementById('btn-clear-log');
+        const btnToggleScanlines = document.getElementById('btn-toggle-scanlines');
+        const btnCloseModal = document.getElementById('btn-close-modal');
+        const strategyButtons = document.querySelectorAll('.btn-strategy');
+
+        // --- UI 更新邏輯 ---
+        function updateUI() {
+            // 更新時間軸
+            elYearDisplay.innerText = `第 ${state.year.toString().padStart(2, '0')} 年 [${state.calendarYear}]`;
+            const progressPercent = (state.year / 30) * 100;
+            elTimelineProgress.style.width = `${progressPercent}%`;
+
+            // 限制數值在 0 - 100 之間
+            state.exergyAdoption = Math.min(100, Math.max(0, state.exergyAdoption));
+            state.meshIntegrity = Math.min(100, Math.max(0, state.meshIntegrity));
+            state.civicTrust = Math.min(100, Math.max(0, state.civicTrust));
+            state.legacyHostility = Math.min(100, Math.max(0, state.legacyHostility));
+            state.antiFragility = Math.min(100, Math.max(0, state.antiFragility));
+
+            // 更新數值顯示與進度條
+            elValExergy.innerText = `${Math.round(state.exergyAdoption)}%`;
+            elBarExergy.style.width = `${state.exergyAdoption}%`;
+
+            elValMesh.innerText = `${Math.round(state.meshIntegrity)}%`;
+            elBarMesh.style.width = `${state.meshIntegrity}%`;
+
+            elValTrust.innerText = `${Math.round(state.civicTrust)}%`;
+            elBarTrust.style.width = `${state.civicTrust}%`;
+
+            elValResistance.innerText = `${Math.round(state.legacyHostility)}%`;
+            elBarResistance.style.width = `${state.legacyHostility}%`;
+
+            elValAntifragility.innerText = `${Math.round(state.antiFragility)}%`;
+            elBarAntifragility.style.width = `${state.antiFragility}%`;
+
+            // 攻防狀態顯示
+            elActiveRedThreat.innerText = state.activeRedThreat;
+            
+            const strategyNames = {
+                'rd_merit': '1. 功績衰減與 ZK-ML',
+                'cultural_kernel': '2. 主權文化核心',
+                'stealth_dual_use': '3. 雙重用途隱蔽部署',
+                'mesh_hardening': '4. 延遲容忍無線網'
+            };
+            elActiveBlueFocus.innerText = strategyNames[state.selectedBlueStrategy] || '尚未選定';
+
+            // 策略按鈕高亮
+            strategyButtons.forEach(btn => {
+                if (btn.dataset.strategy === state.selectedBlueStrategy) {
+                    btn.classList.add('border-cyber-cyan', 'bg-cyber-cyan/15');
+                    btn.classList.remove('border-cyber-border', 'bg-cyber-bg');
+                } else {
+                    btn.classList.remove('border-cyber-cyan', 'bg-cyber-cyan/15');
+                    btn.classList.add('border-cyber-border', 'bg-cyber-bg');
+                }
+            });
+        }
+
+        // 寫入終端日誌
+        function appendLog(text, type = 'sys') {
+            const entry = document.createElement('div');
+            const timeStamp = `[Y${state.year.toString().padStart(2, '0')}]`;
+            
+            if (type === 'red') {
+                entry.className = 'text-cyber-red font-semibold';
+                entry.innerText = `${timeStamp} [紅隊攻擊] ${text}`;
+            } else if (type === 'blue') {
+                entry.className = 'text-cyber-cyan font-semibold';
+                entry.innerText = `${timeStamp} [藍隊防禦] ${text}`;
+            } else if (type === 'headline') {
+                entry.className = 'text-cyber-amber italic';
+                entry.innerText = `${timeStamp} [國際新聞] ${text}`;
+            } else {
+                entry.className = 'text-cyber-dim';
+                entry.innerText = `${timeStamp} ${text}`;
+            }
+
+            elTerminalLog.appendChild(entry);
+            elTerminalLog.scrollTop = elTerminalLog.scrollHeight;
+        }
+
+        // --- 核心年度模擬引擎 ---
+        function advanceYear() {
+            if (state.year >= 30) {
+                stopAutoRun();
+                appendLog("模擬完成！30 年大轉型路線圖演練結束。", "sys");
+                return;
+            }
+
+            state.year += 1;
+            state.calendarYear += 1;
+
+            // 1. 紅隊攻擊觸發
+            const randomAttack = redAttacks[Math.floor(Math.random() * redAttacks.length)];
+            state.activeRedThreat = randomAttack.name;
+            appendLog(`${randomAttack.name}：${randomAttack.desc}`, 'red');
+
+            // 套用紅隊攻擊傷害
+            if (randomAttack.impact.mesh) state.meshIntegrity += randomAttack.impact.mesh;
+            if (randomAttack.impact.trust) state.civicTrust += randomAttack.impact.trust;
+            if (randomAttack.impact.exergy) state.exergyAdoption += randomAttack.impact.exergy;
+            if (randomAttack.impact.resistance) state.legacyHostility += randomAttack.impact.resistance;
+            if (randomAttack.impact.antiFragility) state.antiFragility += randomAttack.impact.antiFragility;
+
+            // 2. 藍隊策略回應與反制
+            let blueLogMsg = "";
+            switch (state.selectedBlueStrategy) {
+                case 'rd_merit':
+                    state.meshIntegrity += 7;
+                    state.antiFragility += 4;
+                    state.legacyHostility -= 3;
+                    blueLogMsg = "強制執行 ZK-ML 零知識證明與非線性功績衰減機制，成功瓦解特洛伊算力劫持。";
+                    break;
+                case 'cultural_kernel':
+                    state.civicTrust += 8;
+                    state.exergyAdoption += 4;
+                    state.legacyHostility -= 2;
+                    blueLogMsg = "啟動主權文化核心與公民學院，推廣草根去中心化共識，鞏固公民信任。";
+                    break;
+                case 'stealth_dual_use':
+                    state.meshIntegrity += 5;
+                    state.exergyAdoption += 6;
+                    state.legacyHostility -= 5;
+                    blueLogMsg = "將計算節點偽裝為市政公交與水電系統的優化程式，成功繞過法規審查與封鎖。";
+                    break;
+                case 'mesh_hardening':
+                    state.antiFragility += 8;
+                    state.meshIntegrity += 6;
+                    state.civicTrust += 2;
+                    blueLogMsg = "全面啟動延遲容忍封包無線電與離網太陽能/水力微型節點，大幅提升物理反脆性。";
+                    break;
+            }
+            appendLog(blueLogMsg, 'blue');
+
+            // 3. 系統自發動態收斂 (Thermodynamics & Systemic Dynamic)
+            // 反脆性越高，系統適應成長越快
+            const resilienceBonus = (state.antiFragility / 100) * 2;
+            state.exergyAdoption += 1.5 + resilienceBonus;
+            state.civicTrust += 1.0;
+
+            // 當可用能採納率突破 40% 臨界點，舊體系敵意開始急速瓦解 (Inversion Tipping Point)
+            if (state.exergyAdoption > 40) {
+                state.legacyHostility -= 2.5;
+            }
+
+            // 時事新聞輸出
+            const randomHeadline = newsHeadlines[Math.floor(Math.random() * newsHeadlines.length)];
+            appendLog(randomHeadline, 'headline');
+
+            updateUI();
+
+            // 檢驗第 10、20、30 年里程碑報告
+            if (state.year === 10 && !state.milestonesTriggered[10]) {
+                triggerMilestoneModal(10);
+            } else if (state.year === 20 && !state.milestonesTriggered[20]) {
+                triggerMilestoneModal(20);
+            } else if (state.year === 30 && !state.milestonesTriggered[30]) {
+                triggerMilestoneModal(30);
+            }
+        }
+
+        // --- 里程碑報告生成器 ---
+        function triggerMilestoneModal(year) {
+            state.milestonesTriggered[year] = true;
+            if (state.autoRun) stopAutoRun();
+
+            let title = "";
+            let badge = "";
+            let content = "";
+
+            if (year === 10) {
+                title = "第 10 年里程碑報告：共存沙盒期 (2035)";
+                badge = "GitHub v0.1 發布";
+                content = `
+                    <p><strong class="text-cyber-cyan">階段摘要：</strong> 開放社會 2.0 成功度過舊體系第一波猛烈的反撲。全球已有超過 120 所公立大學與民間節點導入 DiLoCo 分布式訓練架構。</p>
+                    <div class="bg-cyber-bg p-3 border border-cyber-border rounded space-y-1 my-2">
+                        <div>- 可用能採納率 (Exergy Adoption): <span class="text-cyber-cyan">${Math.round(state.exergyAdoption)}%</span></div>
+                        <div>- 開源算力網完整性 (Mesh Integrity): <span class="text-cyber-green">${Math.round(state.meshIntegrity)}%</span></div>
+                        <div>- 舊體系敵意度 (Legacy Hostility): <span class="text-cyber-red">${Math.round(state.legacyHostility)}%</span></div>
+                    </div>
+                    <p><strong class="text-cyber-amber">GitHub 開源就緒度：</strong> 系統基礎組件已具備開源條件，官方 GitHub 專案正式發布 (v0.1-alpha)，開始吸引 Linux 社群與極客投入貢獻。</p>
+                `;
+            } else if (year === 20) {
+                title = "第 20 年里程碑報告：經濟大倒轉 (2045)";
+                badge = "GitHub v0.3 (Linux 核心模組)";
+                content = `
+                    <p><strong class="text-cyber-cyan">階段摘要：</strong> 臨界點已經出現。面對法幣劇烈通膨與資源危機，多國城市與跨國供應鏈轉而直接在 Exergy 狀態通道（State-Channels）上結算實物物流。</p>
+                    <div class="bg-cyber-bg p-3 border border-cyber-border rounded space-y-1 my-2">
+                        <div>- 可用能採納率 (Exergy Adoption): <span class="text-cyber-cyan">${Math.round(state.exergyAdoption)}%</span></div>
+                        <div>- 系統反脆性 (System Anti-Fragility): <span class="text-cyber-purple">${Math.round(state.antiFragility)}%</span></div>
+                        <div>- 舊體系敵意度 (Legacy Hostility): <span class="text-cyber-red">${Math.round(state.legacyHostility)}%</span></div>
+                    </div>
+                    <p><strong class="text-cyber-green">Linux 範式移轉：</strong> 舊有的權力結構不再試圖消滅算力網路。就如同當年企業選擇擁抱 Linux 核心一樣，為了降低運營成本，舊機構開始陸續轉向運作於算力網之上。</p>
+                `;
+            } else if (year === 30) {
+                title = "第 30 年里程碑報告：熱力學動態平衡 (2055)";
+                badge = "GitHub v0.5 穩定正式版";
+                content = `
+                    <p><strong class="text-cyber-green">30 年路線圖順利完成：</strong> 大轉型在沒有爆發大規模軍事衝突或經濟崩潰的情況下，成功達成了自我維持的熱力學動態平衡。</p>
+                    <div class="bg-cyber-bg p-3 border border-cyber-border rounded space-y-1 my-2">
+                        <div>- 最終可用能採納率: <span class="text-cyber-cyan">${Math.round(state.exergyAdoption)}%</span></div>
+                        <div>- 最終公民信任度: <span class="text-cyber-cyan">${Math.round(state.civicTrust)}%</span></div>
+                        <div>- 舊體系敵意度: <span class="text-cyber-green">${Math.round(state.legacyHostility)}%</span> (已完全轉化融入公民行政)</div>
+                    </div>
+                    <p><strong class="text-cyber-cyan">開放社會 2.0 成立：</strong> 計算能力正式成為公用事業，實物物流透過零和可用能運算進行精準調配，全球公民大會（Sortition Assembly）對自治世界（AW）擁有了永久的民主治理權。</p>
+                `;
+            }
+
+            elModalTitle.innerText = title;
+            elModalBadge.innerText = badge;
+            elModalBody.innerHTML = content;
+            elModal.classList.remove('hidden');
+        }
+
+        // --- 自動演練控制器 ---
+        function toggleAutoRun() {
+            if (state.autoRun) {
+                stopAutoRun();
+            } else {
+                state.autoRun = true;
+                btnAutoRun.classList.remove('border-cyber-green', 'text-cyber-green', 'bg-cyber-green/10');
+                btnAutoRun.classList.add('border-cyber-amber', 'text-cyber-amber', 'bg-cyber-amber/20');
+                document.getElementById('auto-run-text').innerText = "暫停演練";
+
+                state.autoRunInterval = setInterval(() => {
+                    if (state.year >= 30) {
+                        stopAutoRun();
+                    } else {
+                        advanceYear();
+                    }
+                }, 800);
+            }
+        }
+
+        function stopAutoRun() {
+            state.autoRun = false;
+            if (state.autoRunInterval) clearInterval(state.autoRunInterval);
+            btnAutoRun.classList.add('border-cyber-green', 'text-cyber-green', 'bg-cyber-green/10');
+            btnAutoRun.classList.remove('border-cyber-amber', 'text-cyber-amber', 'bg-cyber-amber/20');
+            document.getElementById('auto-run-text').innerText = "自動推演 30年";
+        }
+
+        // --- 重置模擬 ---
+        function resetSimulation() {
+            stopAutoRun();
+            state = JSON.parse(JSON.stringify(initialState));
+            elTerminalLog.innerHTML = `
+                <div class="text-cyber-dim">[系統重置] 兵棋推演引擎已重置至第 0 年。</div>
+                <div class="text-cyber-cyan">[指示] 參數已重新初始化，請選擇戰略並開始演練。</div>
+            `;
+            elModal.classList.add('hidden');
+            updateUI();
+        }
+
+        // --- 事件監聽器繫結 ---
+        btnStepYear.addEventListener('click', () => {
+            if (state.year < 30) advanceYear();
+        });
+
+        btnAutoRun.addEventListener('click', toggleAutoRun);
+        btnReset.addEventListener('click', resetSimulation);
+        btnClearLog.addEventListener('click', () => { elTerminalLog.innerHTML = ''; });
+
+        btnToggleScanlines.addEventListener('click', () => {
+            const overlay = document.getElementById('scanline-overlay');
+            overlay.classList.toggle('hidden');
+        });
+
+        btnCloseModal.addEventListener('click', () => {
+            elModal.classList.add('hidden');
+        });
+
+        strategyButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.selectedBlueStrategy = btn.dataset.strategy;
+                updateUI();
+            });
+        });
+
+        // 頁面載入完成初始化 UI
+        updateUI();
+    </script>
+</body>
+</html>
